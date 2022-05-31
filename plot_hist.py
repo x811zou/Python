@@ -35,7 +35,7 @@ def plot_hist(x, xlabel, median, mean, title=None, fontsize=15):
     plt.axvline(median, color="r", linestyle="--", label="median")
     plt.axvline(mean, color="y", linestyle="--", label="mean")
     plt.ylabel("Counts", fontsize=fontsize)
-    plt.legend(loc="upper right", fontsize=12)
+    plt.legend(loc="best", fontsize=12)
     plt.xlabel(xlabel, fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
     plt.yticks(fontsize=fontsize)

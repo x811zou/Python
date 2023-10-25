@@ -397,7 +397,18 @@ def Generate_path_GIAB(source,model,sigma,workdir):
     path_MS=f"{source}/binomial/simulation/{workdir}/MS_p/" 
     return path_model,path_GIAB,path_NS,path_MS
 
-def Generate_path(source,model,sigma,workdir,model2=None,calculation="max prob"):
+def Generate_path(source,model,sigma,workdir,calculation="max prob"):
+    path_model = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/"
+    if calculation == "max prob":
+        postfix="p"
+    else:
+        postfix="esti"
+    path_NS=f"{source}/binomial/{workdir}/NS_"+postfix+"/" 
+    path_MS=f"{source}/binomial/{workdir}/MS_"+postfix+"/" 
+
+    return path_model,path_NS,path_MS
+
+def Generate_path_beta(source,model,sigma,workdir,model2=None,calculation="max prob"):
     path_model = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/"
     if model2 is not None:
         path_model2 = f"{source}/{model2}/sigma{sigma}/{workdir}/output_pkl/"

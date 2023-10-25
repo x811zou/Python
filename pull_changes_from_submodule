@@ -1,0 +1,13 @@
+cd Ipy_notebook/Python
+git commit -am "Made changes in submodule"
+git push
+cd /path/to/Python  # Replace with the actual path to your "Python" repository
+
+git submodule update --remote
+git commit -am "Updated submodule reference to latest commit"
+git push
+cd /path/to/Ipy_notebook  # Replace with the actual path to your "Ipy_notebook" repository
+git add Python  # Stages the submodule reference change
+git commit -m "Updated Python submodule to the latest commit"
+git push
+

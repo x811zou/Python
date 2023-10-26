@@ -281,8 +281,9 @@ def Prepare_data_fix(gene, hets, depth, sigma,source,model,workdir,calculation,t
     if depth is not None:
         d=depth
         
-    path_model,_,_,_= Generate_path_noLAMBDA_beta(source,model,0.5,workdir,calculation)
+    path_model,_,_= Generate_path(source,model,sigma,workdir,calculation)
     all_file = sorted(os.listdir(path_model))
+
     file_dict = {}
     for pkl in all_file:
         if ".pickle" in pkl:
@@ -344,8 +345,7 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
         neg_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd['t'] == theta_neg)].sort_values(['d','h','g','s'])
     d_group = pos_pd[var_map_np[np.array(var) == None][0]].unique()
     return d_group,var,var_map_np,fixed_var_np,var_fullname_map_np,variable_var_np,pos_pd,neg_pd
-
-
+    
 def get_ROC_AUC(path, file_pos, file_neg, calculation,lambdas=None,if_PRR=None,if_prob=None, if_baseline=None,if_AA=None,if_drop=True):
     # print(path+"/"+file_pos)
     prob1 = read_data.read_one_pickle(path+"/"+file_pos)
@@ -561,7 +561,7 @@ def Plot_ROC_fix3_noLambda_semi(source,model1,model2,workdir,calculation,Num_col
         current_group_pos_list = pos_pd[pos_pd[var_map_np[np.array(var) == None][0]] == each].index
         current_group_neg_list = neg_pd[neg_pd[var_map_np[np.array(var) == None][0]] == each].index
         print(current_group_neg_list)
-        sys.exit()
+
         xlabels = "Fixed parameters "
         for idx in range(len(current_group_pos_list)):
             reduced_file_pos = current_group_pos_list[idx].rsplit("_",1)[0]+".pickle"

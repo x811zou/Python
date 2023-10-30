@@ -130,17 +130,35 @@ def get_qb_p_values(qb_POS, qb_NEG, qb_path):
     qb_neg_p_n = qb_neg_file['normal_p_value'].tolist()
     return qb_pos_p_t,qb_neg_p_t,qb_pos_p_n,qb_neg_p_n
 
-def Calculate_FDR_power_type1error(POS, NEG, threshold=0.05):
-    _, corrected_POS, _, _ = multipletests(POS, method='fdr_bh')
-    
+def Calculate_FDR_power_type1error(pvals_alt, pvals_null, threshold=0.05):
+    n = len(POS)
+    ######### bonferroni correction
+    alpha_corrected = alpha / n
+        # Type I Error
+    type1_error = np.mean(pvals_null < alpha_corrected)
+        # Power
+    power = np.mean(pvals_alt < alpha_corrected)
+
+    ######### FDR correction
+    # Perform FDR correction using Benjamini-Hochberg method for POS
+    _, corrected_POS, _, _ = multipletests(pvals_alt, method='fdr_bh')
+
     # Perform FDR correction using Benjamini-Hochberg method for NEG
-    _, corrected_NEG, _, _ = multipletests(NEG, method='fdr_bh')
+    _, corrected_NEG, _, _ = multipletests(pvals_null, method='fdr_bh')
 
-    # Calculate power and type I error based on the corrected p-values
-    power = (corrected_POS <= threshold).sum() / len(POS)
-    type1error = (corrected_NEG <= threshold).sum() / len(NEG)
+    # Determine the threshold for significance after FDR correction
+    alpha_corrected = alpha  # In the BH procedure, the threshold remains alpha for individual tests
+        # FDR
+    # Number of declared positives and false positives based on corrected p-values
+    R = np.sum(corrected_POS < alpha_corrected)
+    V = np.sum(corrected_NEG < alpha_corrected)
+    FDR = V / (V + R) if R > 0 else 0
+        # TDR
+    T = np.sum(pvals_alt < alpha)  # Total true hypotheses
+    S = np.sum(pvals_alt < alpha_corrected)  # True hypotheses declared significant
+    TDR = S / T if T > 0 else 0
 
-    return format(power,'.5f'), format(type1error,'.5f')
+    return format(power,'.5f'), format(type1error,'.5f'),format(TDR,'.5f'), format(FDR,'.5f')
 
 def Calculate_bonferroni_power_type1error(POS,NEG,threshold=0.05):
     cutoff = threshold/len(POS)

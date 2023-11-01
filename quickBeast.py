@@ -91,7 +91,7 @@ def calculate_qb_lambda_posterior(gene_dict,qb):
         value_list.append(sum_log2_score)  # add the mean to the list of means
     return value_list
 
-def Calculate_power_type1error(POS,NEG,path,parameter,type1error,lambdas=None):
+def Calculate_power_type1error_for_posterior(POS,NEG,path,parameter,type1error,lambdas=None):
     ALT,qb_ALT = get_data(POS,path,parameter)
     REF,qb_REF = get_data(NEG,path,parameter)
     # REF (B: B with gam lambda; B_qb: B with qb lambda)
@@ -102,11 +102,11 @@ def Calculate_power_type1error(POS,NEG,path,parameter,type1error,lambdas=None):
     BEASTIE_ALT=calculate_posterior_value(calculation="max_prob",prob=ALT,Lambda=lambdas)
     BEATIE_qb_lambda_ALT=calculate_qb_lambda_posterior(ALT,qb_ALT)
     qb_ALT=qb_ALT['qb_posterior'].tolist()
-    # power
+    # bonferroni power
     BEASTIE_power=len([i for i in BEASTIE_ALT if i>0.5])/1000
     BEATIE_qb_lambda_power=len([i for i in BEATIE_qb_lambda_ALT if i>0.5])/1000
     qb_power=len([i for i in qb_ALT if i>0.5])/1000
-    # type1error
+    # bonferroni type1error
     BEASTIE_type1error=len([i for i in BEASTIE_REF if i>0.5])/1000
     BEATIE_qb_lambda_type1rror=len([i for i in BEATIE_qb_lambda_REF if i>0.5])/1000
     qb_type1error=len([i for i in qb_REF if i>0.5])/1000
@@ -130,14 +130,15 @@ def get_qb_p_values(qb_POS, qb_NEG, qb_path):
     qb_neg_p_n = qb_neg_file['normal_p_value'].tolist()
     return qb_pos_p_t,qb_neg_p_t,qb_pos_p_n,qb_neg_p_n
 
-def Calculate_FDR_power_type1error(pvals_alt, pvals_null, threshold=0.05):
-    n = len(POS)
+
+def Calculate_power_type1error_pval(pvals_alt, pvals_null, threshold=0.05):
+    n = len(pvals_null)
     ######### bonferroni correction
-    alpha_corrected = alpha / n
+    alpha_corrected = threshold / n
         # Type I Error
-    type1_error = np.mean(pvals_null < alpha_corrected)
+    type1error = np.mean(np.array(pvals_null) < alpha_corrected)
         # Power
-    power = np.mean(pvals_alt < alpha_corrected)
+    power = np.mean(np.array(pvals_alt) < alpha_corrected)
 
     ######### FDR correction
     # Perform FDR correction using Benjamini-Hochberg method for POS
@@ -147,15 +148,15 @@ def Calculate_FDR_power_type1error(pvals_alt, pvals_null, threshold=0.05):
     _, corrected_NEG, _, _ = multipletests(pvals_null, method='fdr_bh')
 
     # Determine the threshold for significance after FDR correction
-    alpha_corrected = alpha  # In the BH procedure, the threshold remains alpha for individual tests
+    alpha_corrected = threshold  # In the BH procedure, the threshold remains alpha for individual tests
         # FDR
     # Number of declared positives and false positives based on corrected p-values
     R = np.sum(corrected_POS < alpha_corrected)
     V = np.sum(corrected_NEG < alpha_corrected)
     FDR = V / (V + R) if R > 0 else 0
         # TDR
-    T = np.sum(pvals_alt < alpha)  # Total true hypotheses
-    S = np.sum(pvals_alt < alpha_corrected)  # True hypotheses declared significant
+    T = np.sum(np.array(pvals_alt) < threshold)  # Total true hypotheses
+    S = np.sum(np.array(pvals_alt) < alpha_corrected)  # True hypotheses declared significant
     TDR = S / T if T > 0 else 0
 
     return format(power,'.5f'), format(type1error,'.5f'),format(TDR,'.5f'), format(FDR,'.5f')

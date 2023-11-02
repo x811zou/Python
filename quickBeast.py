@@ -143,23 +143,22 @@ def Calculate_power_type1error_pval(pvals_alt, pvals_null, threshold=0.05):
     ######### FDR correction
     # Perform FDR correction using Benjamini-Hochberg method for POS
     _, corrected_POS, _, _ = multipletests(pvals_alt, method='fdr_bh')
-
     # Perform FDR correction using Benjamini-Hochberg method for NEG
     _, corrected_NEG, _, _ = multipletests(pvals_null, method='fdr_bh')
-
-    # Determine the threshold for significance after FDR correction
-    alpha_corrected = threshold  # In the BH procedure, the threshold remains alpha for individual tests
         # FDR
     # Number of declared positives and false positives based on corrected p-values
-    R = np.sum(corrected_POS < alpha_corrected)
-    V = np.sum(corrected_NEG < alpha_corrected)
+    R = np.sum(corrected_POS < threshold)
+    V = np.sum(corrected_NEG < threshold)
     FDR = V / (V + R) if R > 0 else 0
         # TDR
     T = np.sum(np.array(pvals_alt) < threshold)  # Total true hypotheses
-    S = np.sum(np.array(pvals_alt) < alpha_corrected)  # True hypotheses declared significant
+    S = np.sum(np.array(pvals_alt) < threshold)  # True hypotheses declared significant
     TDR = S / T if T > 0 else 0
-
-    return format(power,'.5f'), format(type1error,'.5f'),format(TDR,'.5f'), format(FDR,'.5f')
+        # type 1 error
+    fdr_type1error = np.mean(np.array(corrected_NEG) < threshold)
+        # power
+    fdr_power = np.mean(np.array(corrected_POS) < threshold)
+    return format(power,'.5f'), format(type1error,'.5f'),format(TDR,'.5f'), format(FDR,'.5f'),format(fdr_power,'.5f'), format(fdr_type1error,'.5f')
 
 def Calculate_bonferroni_power_type1error(POS,NEG,threshold=0.05):
     cutoff = threshold/len(POS)

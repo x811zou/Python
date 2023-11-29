@@ -19,6 +19,29 @@ from math import log
 from statsmodels.stats.multitest import multipletests
 from prettytable import PrettyTable
 
+def get_BEASTIE_tsv(NEG,POS,path_beastie):
+    NEG = NEG.replace('.pickle', '.tsv')
+    POS = POS.replace('.pickle', '.tsv')
+    NEG = pd.read_csv(path_beastie+NEG,sep="\t")
+    POS = pd.read_csv(path_beastie+POS,sep="\t")
+    return POS, NEG
+
+def get_tsv_p_values(qb_POS, qb_NEG, qb_path):
+    qb_pos_file=pd.read_csv(f"{qb_path}/{qb_POS}",delimiter="\t",header=0)
+    qb_neg_file=pd.read_csv(f"{qb_path}/{qb_NEG}",delimiter="\t",header=0)
+    qb_pos_p_t = qb_pos_file['t_p_value'].tolist()
+    qb_neg_p_t = qb_neg_file['t_p_value'].tolist()
+    qb_pos_p_st = qb_pos_file['st_p_value'].tolist()
+    qb_neg_p_st = qb_neg_file['st_p_value'].tolist()
+    qb_pos_p_n = qb_pos_file['normal_p_value'].tolist()
+    qb_neg_p_n = qb_neg_file['normal_p_value'].tolist()
+    return qb_pos_p_t,qb_neg_p_t,qb_pos_p_st,qb_neg_p_st,qb_pos_p_n,qb_neg_p_n
+
+def get_ROC_tsv(prob1,prob2):
+    fpr, tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=True)
+    precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
+    return fpr, tpr, precision, recall
+
 def Table_qb_NS_power(POS,NEG,qb_path,NS_path,MS_path,alpha_beta,type1error,lambdas = None):
     ns_NEG,ns_POS,qb_NEG,qb_POS = get_filename(POS,NEG)
     qb_POS_p, qb_NEG_p,_,_ = get_qb_p_values(qb_POS, qb_NEG, qb_path)
@@ -227,7 +250,7 @@ def Plot_ROC_fix3_qb(source,model,workdir,calculation,lambda_model,chosen_lambda
             expected_type1error = 0.05/int(g)
             #
             if chosen_lambda is None:
-                chosen_lambda = predict_lambda_GAM.get_lambda_from_gam(gam_model, log(hets), log(totalcount), expected_type1error, candidate_lambdas = np.linspace(1, 3, 2000))
+                chosen_lambda = predict_BEASTIE_GAM_lambda(gam_model, hets, totalcount, expected_type1error)
             # calculate auc score
             fpr_m,tpr_m,s1 = get_ROC_AUC(path_model,current_group_pos_list[idx],current_group_neg_list[idx],calculation,lambdas=chosen_lambda)
             fpr_b,tpr_b,s2 = get_ROC_AUC(path_NS,reduced_file_pos,reduced_file_neg,calculation,if_baseline=True)
@@ -251,3 +274,7 @@ def Plot_ROC_fix3_qb(source,model,workdir,calculation,lambda_model,chosen_lambda
             axs.flat[i].legend(fontsize=13,loc='lower right')
     plt.suptitle(str(title)+"\n"+xlabels+"theta pos: "+str(theta_pos)+" theta neg: "+str(theta_neg),fontsize=20)
     plt.show()
+
+def predict_BEASTIE_GAM_lambda(gam_model, hets, totalcount, expected_type1error):
+    lambda_pick = predict_lambda_GAM.get_lambda_from_gam(gam_model, log(hets), log(totalcount), expected_type1error, candidate_lambdas = np.linspace(1, 3, 2000))
+    return lambda_pick

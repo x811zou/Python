@@ -18,6 +18,7 @@ from sklearn import metrics,preprocessing
 from sklearn.metrics import roc_curve, auc,precision_recall_curve
 from . import ROC_common
 from . import read_data
+from . import quickBeast
 
 def ROC_comparison_fix3_beta(source,model,workdir,calculation,theta_pos=None,theta_neg=None,gene=None,hets=None,depth=None,sigma=None,title=None,Num_para=3,Num_col=None):
     # judge whether  2 of the 4 are None, and 2 of the 4 are not None
@@ -321,21 +322,18 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
     if depth is not None:
         d=depth
         
-    path_model,_,_,_= Generate_path_noLAMBDA_beta(source,model,sigma,workdir,calculation)
+    path_model,_,_= Generate_path(source,model,sigma,workdir,calculation)
     all_file = sorted(os.listdir(path_model))
     file_dict = {}
     for pkl in all_file:
         if (".pickle" in pkl) and ("tpi" not in pkl) and ("giab" not in pkl):
-            print(pkl)
             pkl=pkl.replace("CEU_","")
             name=pkl.rsplit(".pickle")[0].rsplit("_")
-            print(name)
             file_dict[pkl] = {}
             for each_value in name:
                 file_dict[pkl][each_value.split("-")[0]] = float(each_value.split("-")[1])
         else:continue
     file_dict_pd = pd.DataFrame(file_dict).transpose()
-    print(file_dict_pd)
     file_dict_pd['file'] = file_dict_pd.index
     if Num_para == 3:
         pos_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd[valid_var_np[2]] == valid_full_var_np[2])&(file_dict_pd['t'] == theta_pos)].sort_values(['d','h','g','s'])
@@ -345,38 +343,46 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
         neg_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd['t'] == theta_neg)].sort_values(['d','h','g','s'])
     d_group = pos_pd[var_map_np[np.array(var) == None][0]].unique()
     return d_group,var,var_map_np,fixed_var_np,var_fullname_map_np,variable_var_np,pos_pd,neg_pd
-    
-def get_ROC_AUC(path, file_pos, file_neg, calculation,lambdas=None,if_PRR=None,if_prob=None, if_baseline=None,if_AA=None,if_drop=True):
-    # print(path+"/"+file_pos)
-    prob1 = read_data.read_one_pickle(path+"/"+file_pos)
-    prob2 = read_data.read_one_pickle(path+"/"+file_neg)
 
+
+def get_ROC_AUC(path, file_pos, file_neg, calculation,lambdas=None,if_PRR=None,if_prob=None, if_baseline=None,if_AA=None,if_drop=True):
     # baseline estiamtes/prob
     if if_baseline == True and if_AA !=True:
-        if calculation == "max_prob":
+        prob1 = read_data.read_one_pickle(path+"/"+file_pos)
+        prob2 = read_data.read_one_pickle(path+"/"+file_neg)
+        if calculation == "estimate":
+            fpr,tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,drop_intermediate=if_drop)
+        else:
             fpr,tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=0,drop_intermediate=if_drop)
             precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=0)
-        else:
-            fpr,tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,drop_intermediate=if_drop)
 
     # ADM estimates
     elif if_AA==True and if_baseline!=True:
-        if calculation == "median":
+        prob1 = read_data.read_one_pickle(path+"/"+file_pos)
+        prob2 = read_data.read_one_pickle(path+"/"+file_neg)
+        if calculation == "estimate":
             fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
             precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
         else:
             fpr, tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,drop_intermediate=if_drop)
-    # model estimates/prob
+
+    # BEASTIE estimates/prob
     elif if_baseline !=True and if_AA != True:
-        prob1=ROC_common.calculate_posterior_value(calculation,prob1,Lambda=lambdas)
-        prob2=ROC_common.calculate_posterior_value(calculation,prob2,Lambda=lambdas)
-        if calculation == "median": #estimates
-            prob1_t = [abs(x - 1) for x in prob1]
-            prob2_t = [abs(x - 1) for x in prob2]
-            fpr, tpr, _ = roc_curve([1 for i in range(len(prob1_t))] + [0 for i in range(len(prob2_t))], prob1_t + prob2_t,drop_intermediate=if_drop)
+        if calculation == "pval":
+            NEG = file_neg.replace('.pickle', '.tsv')
+            POS = file_pos.replace('.pickle', '.tsv')
+            _,_,pos_p_st,neg_p_st,_,_ = quickBeast.get_tsv_p_values(POS,NEG,path)
+            fpr, tpr, precision, recall = quickBeast.get_ROC_tsv(pos_p_st,neg_p_st)
         else:
-            fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
-            precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
+            prob1=ROC_common.calculate_posterior_value(calculation,prob1,Lambda=lambdas)
+            prob2=ROC_common.calculate_posterior_value(calculation,prob2,Lambda=lambdas)
+            if calculation == "estimate": #estimates
+                prob1_t = [abs(x - 1) for x in prob1]
+                prob2_t = [abs(x - 1) for x in prob2]
+                fpr, tpr, _ = roc_curve([0 for i in range(len(prob1_t))] + [1 for i in range(len(prob2_t))], prob1_t + prob2_t,drop_intermediate=if_drop)
+            elif calculation == "max_prob": #max prob
+                fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
+                precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
 
     if if_PRR is not True:
         return(fpr, tpr, round(auc(fpr,tpr),3))
@@ -397,9 +403,9 @@ def Generate_path_GIAB(source,model,sigma,workdir):
     path_MS=f"{source}/binomial/simulation/{workdir}/MS_p/" 
     return path_model,path_GIAB,path_NS,path_MS
 
-def Generate_path(source,model,sigma,workdir,calculation="max prob"):
+def Generate_path(source,model,sigma,workdir,calculation="estimate"):
     path_model = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/"
-    if calculation == "max prob":
+    if calculation == "pval":
         postfix="p"
     else:
         postfix="esti"

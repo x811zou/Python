@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import math
 from .read_data import read_one_pickle, get_NS_p_values
 from .ROC_common import Make_judgement, calculate_posterior_value
-from .ROC_noLAMBDA import ROC_comparison_fix3_beta, ROC_comparison_fix3_sigma, ROC_comparison_fix3_noLambda, ROC_comparison_fix3_Lambda, get_ROC_AUC, Prepare_data_fix
+from .ROC_noLAMBDA import get_ROC_AUC, Prepare_data_fix
 import sys
 sys.path.append('/home/scarlett/github/BEASTIE')
 from BEASTIE import predict_lambda_GAM
@@ -26,19 +26,26 @@ def get_BEASTIE_tsv(NEG,POS,path_beastie):
     POS = pd.read_csv(path_beastie+POS,sep="\t")
     return POS, NEG
 
+def calculate_AUC_qb(path, file_pos, file_neg):
+    _, _, qb_NEG, qb_POS = get_filename(file_pos,file_neg)
+    mean_qb_pos_p_st,mean_qb_neg_p_st,mode_qb_pos_p_st,mode_qb_neg_p_st = get_tsv_p_values(qb_POS, qb_NEG, path)
+    #t_fpr, t_tpr, _, _, = get_ROC_tsv(qb_pos_p_t,qb_neg_p_t)
+    mean_st_fpr, mean_st_tpr, _, _, = get_ROC_tsv(mean_qb_pos_p_st,mean_qb_neg_p_st)
+    mode_st_fpr, mode_st_tpr, _, _, = get_ROC_tsv(mode_qb_pos_p_st,mode_qb_neg_p_st)
+    #n_fpr, n_tpr, _, _, = get_ROC_tsv(qb_pos_p_n,qb_neg_p_n)
+    return mean_st_fpr, mean_st_tpr,mode_st_fpr, mode_st_tpr
+
 def get_tsv_p_values(qb_POS, qb_NEG, qb_path):
     qb_pos_file=pd.read_csv(f"{qb_path}/{qb_POS}",delimiter="\t",header=0)
     qb_neg_file=pd.read_csv(f"{qb_path}/{qb_NEG}",delimiter="\t",header=0)
-    qb_pos_p_t = qb_pos_file['t_p_value'].tolist()
-    qb_neg_p_t = qb_neg_file['t_p_value'].tolist()
-    qb_pos_p_st = qb_pos_file['st_p_value'].tolist()
-    qb_neg_p_st = qb_neg_file['st_p_value'].tolist()
-    qb_pos_p_n = qb_pos_file['normal_p_value'].tolist()
-    qb_neg_p_n = qb_neg_file['normal_p_value'].tolist()
-    return qb_pos_p_t,qb_neg_p_t,qb_pos_p_st,qb_neg_p_st,qb_pos_p_n,qb_neg_p_n
+    mean_qb_pos_p_st = qb_pos_file['mean_st_p_value'].tolist()
+    mean_qb_neg_p_st = qb_neg_file['mean_st_p_value'].tolist()
+    mode_qb_pos_p_st = qb_pos_file['mode_st_p_value'].tolist()
+    mode_qb_neg_p_st = qb_neg_file['mode_st_p_value'].tolist()
+    return mean_qb_pos_p_st,mean_qb_neg_p_st,mode_qb_pos_p_st,mode_qb_neg_p_st
 
 def get_ROC_tsv(prob1,prob2):
-    fpr, tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=True)
+    fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=0,drop_intermediate=True)
     precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
     return fpr, tpr, precision, recall
 
@@ -79,21 +86,22 @@ def print_qb_NS_power_table(n_gene,n_hets,n_depth,alt,alpha_beta,lambdas,sigma,a
 
     Table_qb_NS_power(b_POS,b_NEG,qb_path,NS_path,MS_path,alpha_beta,alpha)
 
-def get_data(filename,path,parameter):
+def get_data(filename,path_qb,parameter):
     base_filename = os.path.splitext(filename)[0] # remove extension
     parts = base_filename.split('_') # split by underscore
     qb_filename = '_'.join(parts[:-1])
     # read data
-    BEASTIE = read_one_pickle(path+"/"+filename)
-    qb=pd.read_csv(f"/data2/stan/quickBEAST/a{parameter}_b{parameter}/lambda0.04545/parametrized/ASE_0.05_error/{qb_filename}.txt",delimiter="\t",header=None)
-    qb.columns=['geneID','qb_posterior','qb_lambda','qb_mean','qb_var','qb_zscore','null_mean','null_std','null_df','null_loc','null_scale','normal_p_value','t_p_value']
-    qb['qb_lambda'] = pd.to_numeric(qb['qb_lambda'], errors='coerce')
-    qb['qb_posterior'] = pd.to_numeric(qb['qb_posterior'], errors='coerce')
-    qb['t_p_value'] = pd.to_numeric(qb['t_p_value'], errors='coerce')
-    qb['converted_qB_lambda_right'] = (0.5 + qb['qb_lambda']) / (1 - (0.5 + qb['qb_lambda']))
-    qb['converted_qB_lambda_left'] = (0.5 - qb['qb_lambda']) / (1 - (0.5 - qb['qb_lambda']))
-    qb['converted_qB_lambda'] = qb.apply(lambda row: max(row['converted_qB_lambda_left'], row['converted_qB_lambda_right']), axis=1)
-    return BEASTIE, qb
+    #BEASTIE = read_one_pickle(path+"/"+filename)
+    qb=pd.read_csv(f"{path_qb}/{qb_filename}.txt",delimiter="\t",header=None)
+    qb.columns=['geneID','qb_posterior','qb_mean','qb_var','qb_zscore']
+    # qb.columns=['geneID','qb_mean','qb_var','qb_zscore','normal_p_value','t_p_value','st_p_value']
+    #qb['qb_lambda'] = pd.to_numeric(qb['qb_lambda'], errors='coerce')
+    #qb['qb_posterior'] = pd.to_numeric(qb['qb_posterior'], errors='coerce')
+    #qb['t_p_value'] = pd.to_numeric(qb['t_p_value'], errors='coerce')
+    #qb['converted_qB_lambda_right'] = (0.5 + qb['qb_lambda']) / (1 - (0.5 + qb['qb_lambda']))
+    #qb['converted_qB_lambda_left'] = (0.5 - qb['qb_lambda']) / (1 - (0.5 - qb['qb_lambda']))
+    #qb['converted_qB_lambda'] = qb.apply(lambda row: max(row['converted_qB_lambda_left'], row['converted_qB_lambda_right']), axis=1)
+    return qb
 
 def calculate_qb_lambda_posterior(gene_dict,qb):
     value_list=[]
@@ -194,13 +202,6 @@ def get_ROC_qb(prob1,prob2):
     fpr, tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=True)
     precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
     return fpr, tpr, precision, recall
-
-def calculate_AUC_qb(path, file_pos, file_neg):
-    _, _, qb_NEG, qb_POS = get_filename(file_pos,file_neg)
-    qb_pos_p_t,qb_neg_p_t,qb_pos_p_n,qb_neg_p_n = get_qb_p_values(qb_POS, qb_NEG, path)
-    t_fpr, t_tpr, _, _, = get_ROC_qb(qb_pos_p_t,qb_neg_p_t)
-    n_fpr, n_tpr, _, _, = get_ROC_qb(qb_pos_p_n,qb_neg_p_n)
-    return t_fpr, t_tpr, n_fpr, n_tpr
 
 def ROC_comparison_fix3_qb(source,model,workdir,calculation,lambda_model,chosen_lambda=None,theta_pos=None,theta_neg=None,gene=None,hets=None,depth=None,sigma=None,title=None,Num_para=None,Num_col=None):
     # judge whether  2 of the 4 are None, and 2 of the 4 are not None

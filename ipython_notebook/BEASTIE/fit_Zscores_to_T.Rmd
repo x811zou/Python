@@ -1,0 +1,360 @@
+---
+title: "fit_Zscore_to_T"
+output: ht  vml_document
+date: "2023-11-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages("MASS")
+library(MASS)
+#install.packages("fGarch")
+library(fGarch)
+library(dplyr)
+library(moments) 
+library(sn) 
+library(ggplot2)
+library(gridExtra)
+```
+## R Markdown
+
+```{r}
+df1 <- read.csv("/data2/stan/quickBEAST/a8.789625_b8.789625/lambda0.04545/parametrized/ASE_0.05_error/g-1000_h-10_d-100_t-1.txt",sep="\t")
+X1 <- df1$qb_zscore
+# Check for NA values
+sum(is.na(X1))
+```
+
+
+```{r}
+hist(X1)
+```
+
+```{r}
+fit_t_distribution <- function(data) {
+  fit <- fitdistr(data, "t")
+  return(fit)
+}
+fit_skewed_t_distribution <- function(data) {
+  fit <- sstdFit(data)
+  return(fit)
+}
+fit_normal_distribution <- function(data) {
+  mean_value <- mean(data, na.rm = TRUE)
+  sd_value <- sd(data, na.rm = TRUE)
+  fit <- list(mean = mean_value, sd = sd_value)
+  return(fit)
+}
+
+# Function to generate samples from a t-distribution
+generate_t_samples <- function(fit, n) {
+  rt(n, df = fit$estimate["df"])
+}
+
+generate_skewed_t_samples <- function(fit, n) {
+  # Extract parameters from the fit object
+  mean <- fit$estimate["mean"]
+  sd <- fit$estimate["sd"]
+  xi <- fit$estimate["xi"]
+  nu <- fit$estimate["nu"]
+
+  # Check for valid parameters
+  if(is.na(mean) || is.na(sd) || is.na(xi) || is.na(nu) || nu <= 0) {
+    stop("Invalid or NA values in fitted parameters.")
+  }
+
+  # Generate samples
+  rsstd(n, mean = mean, sd = sd, xi = xi, nu = nu)
+}
+
+generate_normal_samples <- function(fit, n) {
+  rnorm(n, mean = fit$mean, sd = fit$sd)
+}
+
+
+```
+
+```{r}
+# Fit normal, t, and skewed t distributions for X1
+fit_normal_X1 <- fit_normal_distribution(X1)
+fit_t_X1 <- fit_t_distribution(X1)
+fit_skewed_t_X1 <- fit_skewed_t_distribution(X1)
+
+# Generate samples from each fitted distribution
+normal_samples_X1 <- generate_normal_samples(fit_normal_X1, length(X1))
+t_samples_X1 <- generate_t_samples(fit_t_X1, length(X1))
+skewed_t_samples_X1 <- generate_skewed_t_samples(fit_skewed_t_X1, length(X1))
+```
+
+```{r}
+hist(X1, breaks = 100)
+```
+```{r}
+hist(normal_samples_X1, breaks = 100)
+```
+
+```{r}
+hist(t_samples_X1, breaks = 100)
+```
+
+```{r}
+hist(skewed_t_samples_X1, breaks = 100)
+```
+
+```{r}
+# Combine all data and labels
+data_list <- list(
+  data.frame(Value = X1, Group = "Original"),
+  data.frame(Value = normal_samples_X1, Group = "Normal"),
+  data.frame(Value = t_samples_X1, Group = "T-Distribution"),
+  data.frame(Value = skewed_t_samples_X1, Group = "Skewed T-Distribution")
+)
+
+labels <- c("Original", "Normal", "T-Distribution", "Skewed T-Distribution")
+
+# Create a function to plot overlaid histograms
+plot_overlaid_histograms <- function(data, labels) {
+  ggplot(data, aes(x = Value, fill = Group)) +
+    geom_histogram(alpha = 0.5, position = "identity", bins = 30) +
+    labs(
+      title = "Overlaid Histograms",
+      x = "Value",
+      y = "Frequency",
+      fill = "Legend Title"
+    ) +
+    scale_fill_manual(values = c("Original" = "black", "Normal" = "red", "T-Distribution" = "green", "Skewed T-Distribution" = "blue")) +
+    theme(
+      panel.background = element_rect(fill = "transparent"),
+      text = element_text(size = 14),  # Adjust font size for text
+      legend.text = element_text(size = 12),  # Adjust font size for legend text
+      legend.title = element_text(size = 14)  # Adjust font size for legend title
+    )
+}
+
+# Create a function to plot overlaid density plots
+plot_overlaid_density <- function(data, labels) {
+  ggplot(data, aes(x = Value, color = Group)) +
+    geom_density(alpha = 0.5) +
+    labs(
+      title = "Overlaid Density Plots",
+      x = "Value",
+      y = "Density",
+      color = "Legend Title"
+    ) +
+    scale_color_manual(values = c("Original" = "black", "Normal" = "red", "T-Distribution" = "green", "Skewed T-Distribution" = "blue")) +
+    theme(
+      panel.background = element_rect(fill = "transparent"),
+      text = element_text(size = 14),  # Adjust font size for text
+      legend.text = element_text(size = 12),  # Adjust font size for legend text
+      legend.title = element_text(size = 14)  # Adjust font size for legend title
+    )
+}
+
+# Combine both plots side by side
+combined_plots <- grid.arrange(
+  plot_overlaid_histograms(do.call(rbind, data_list), labels),
+  plot_overlaid_density(do.call(rbind, data_list), labels),
+  ncol = 2
+)
+
+# Print the combined plots
+print(combined_plots)
+
+```
+
+```
+```{r}
+plot_histograms <- function(original_data, t_samples, skewed_t_samples) {
+  # Set the range for the histogram
+  combined_data <- c(original_data, t_samples, skewed_t_samples)
+  data_range <- range(combined_data)
+
+  # Plot histogram of the original data
+  hist(original_data, freq = FALSE, xlim = data_range, 
+       main = "Histogram Comparison", xlab = "Value", col = rgb(0, 0, 1, 0.25), breaks = 30)
+
+  # Add histogram of t-distribution samples
+  hist(t_samples, freq = FALSE, add = TRUE, col = rgb(0, 1, 0, 0.25), breaks = 30)
+
+  # Add histogram of skewed t-distribution samples
+  hist(skewed_t_samples, freq = FALSE, add = TRUE, col = rgb(1, 1, 0, 0.25), breaks = 30)
+
+  # Add a legend
+  legend("topright", legend = c("Original", "T-Distribution", "Skewed T-Distribution"),
+         fill = c(rgb(0, 0, 1, 0.25), rgb(0, 1, 0, 0.25), rgb(1, 1, 0, 0.25)))
+}
+# You can then plot histograms or conduct further analysis as needed
+plot_histograms(X1, t_samples_X1, skewed_t_samples_X1)
+```
+
+
+```{r fig.width=8, fig.height=6}
+plot_distributions <- function(original_data, normal_samples, t_samples, skewed_t_samples) {
+  plot_density <- function(data, col, add=FALSE) {
+    density_data <- density(data)
+    if (!add) {
+      plot(density_data, main="Distribution Comparison", xlab="Value", ylab="Density", 
+           col=col, xlim=range(density_data$x), ylim=range(0, density_data$y), lwd=2)
+    } else {
+      lines(density_data, col=col, lwd=2)
+    }
+  }
+
+  # Plot original data density
+  plot_density(original_data, "black")
+
+  # Add normal distribution density
+  plot_density(normal_samples, "red", add=TRUE)
+
+  # Add t-distribution density
+  plot_density(t_samples, "blue", add=TRUE)
+
+  # Add skewed t-distribution density
+  plot_density(skewed_t_samples, "green", add=TRUE)
+
+  # Add a legend
+  legend("topright", legend = c("Original", "Normal", "T-Distribution", "Skewed T-Distribution"),
+         col = c("black", "red", "blue", "green"), lwd=2)
+}
+
+# Usage:
+plot_distributions(X1, normal_samples_X1, t_samples_X1, skewed_t_samples_X1)
+
+```
+
+```{r fig.width=8, fig.height=6}
+plot_distributions <- function(original_data, t_samples, skewed_t_samples) {
+  plot_density <- function(data, col, add=FALSE) {
+    density_data <- density(data)
+    if (!add) {
+      plot(density_data, main="Distribution Comparison", xlab="Value", ylab="Density", 
+           col=col, xlim=range(density_data$x), ylim=range(0, density_data$y), lwd=2)
+    } else {
+      lines(density_data, col=col, lwd=2)
+    }
+  }
+
+  # Plot original data density
+  plot_density(original_data, "black")
+
+
+  # Add t-distribution density
+  plot_density(t_samples, "blue", add=TRUE)
+
+  # Add skewed t-distribution density
+  plot_density(skewed_t_samples, "green", add=TRUE)
+
+  # Add a legend
+  legend("topright", legend = c("Original", "T-Distribution", "Skewed T-Distribution"),
+         col = c("black", "blue", "green"), lwd=2)
+}
+
+# Usage:
+plot_distributions(X1, t_samples_X1, skewed_t_samples_X1)
+
+```
+#### Z-scores against n/t/st distribution
+```{r fig.width=6, fig.height=6}
+# Load necessary libraries
+library(sn)
+library(ggplot2)
+
+# Set the random seed for reproducibility
+set.seed(123)
+
+data <- X1
+# Sort the data
+sorted_data <- sort(data)
+```
+
+```{r fig.width=8, fig.height=6}
+plot_qq <- function(qq_plot_data,theoretical_quantiles,title){
+  # Calculate the negative log10 of the quantiles
+  qq_plot_data$log10_Observed <- -log10(qq_plot_data$Observed)
+  qq_plot_data$log10_Theoretical <- -log10(theoretical_quantiles)
+  # Create a QQ plot
+  # Create a QQ plot with the same x-axis and y-axis limits
+  ggplot(qq_plot_data, aes(x = log10_Theoretical, y = log10_Observed)) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+    labs(title = paste0("QQ Plot in -log10 Scale against ",title," Distribution",sep=""),
+         x = "-log10(Theoretical Quantiles)",
+         y = "-log10(Observed Quantiles)") +
+    coord_fixed(ratio = 1)+
+        xlim(c(-1,4)) +   # Set the same x-axis limits
+    ylim(c(-1,4)) +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 12),  # Increase font size for axis labels
+          axis.title = element_text(size = 14), # Increase font size for axis titles
+          plot.title = element_text(size = 16)) # Increase font size for t
+}
+
+plot_qq <- function(qq_plot_data,theoretical_quantiles,title){
+  # Create a QQ plot
+  # Create a QQ plot with the same x-axis and y-axis limits
+  ggplot(qq_plot_data, aes(x = theoretical_quantiles, y = qq_plot_data$Observed)) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+    labs(title = paste0("QQ Plot against ",title," Distribution",sep=""),
+         x = "Theoretical Quantiles",
+         y = "Observed Quantiles") +
+    coord_fixed(ratio = 1)+
+        xlim(c(-1,4)) +   # Set the same x-axis limits
+    ylim(c(-1,4)) +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 12),  # Increase font size for axis labels
+          axis.title = element_text(size = 14), # Increase font size for axis titles
+          plot.title = element_text(size = 16)) # Increase font size for t
+}
+qq_normal <- function(data,title){
+  sorted_data<-sort(data)
+  # Create a QQ plot in -log10 scale against a normal distribution
+  qq_plot_data <- data.frame(Observed = sorted_data)
+  theoretical_quantiles <- qnorm(ppoints(length(sorted_data)))  # Calculate theoretical quantiles
+  plot_qq(qq_plot_data,theoretical_quantiles,title)
+}
+qq_t <- function(data,title){
+  sorted_data<-sort(data)
+  # Create a QQ plot in -log10 scale against a normal distribution
+  qq_plot_data <- data.frame(Observed = sorted_data)
+  theoretical_quantiles <- qt(ppoints(length(sorted_data)),df=df)  # Adjust df as needed
+  plot_qq(qq_plot_data,theoretical_quantiles,title)
+}
+
+
+qq_st <- function(data, title) {
+  # Fit your data to a skewed t-distribution using sstdFit
+  fit_result <- sstdFit(data)
+  
+  # Extract estimated parameters, including skewness
+  skewness_est <- fit_result$gradient["xi"]
+
+  sorted_data <- sort(data)
+  n <- length(sorted_data)
+  
+  # Calculate quantiles from a theoretical skewed t-distribution
+  theoretical_quantiles <- qsn(ppoints(n), xi = skewness_est)
+  
+  # Create a QQ plot in -log10 scale against a normal distribution
+  qq_plot_data <- data.frame(Observed = sorted_data)
+  plot_qq(qq_plot_data, theoretical_quantiles, title)
+}
+```
+
+
+```{r}
+qq_normal(X1,"normal")
+```
+
+
+```{r}
+qq_t(X1,"t")
+```
+
+```{r}
+qq_st(X1,"skewed t")
+```
+

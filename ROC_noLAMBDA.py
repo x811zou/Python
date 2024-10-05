@@ -18,6 +18,7 @@ from sklearn import metrics,preprocessing
 from sklearn.metrics import roc_curve, auc,precision_recall_curve
 from . import ROC_common
 from . import read_data
+from . import quickBeast
 
 def ROC_comparison_fix3_beta(source,model,workdir,calculation,theta_pos=None,theta_neg=None,gene=None,hets=None,depth=None,sigma=None,title=None,Num_para=3,Num_col=None):
     # judge whether  2 of the 4 are None, and 2 of the 4 are not None
@@ -281,8 +282,9 @@ def Prepare_data_fix(gene, hets, depth, sigma,source,model,workdir,calculation,t
     if depth is not None:
         d=depth
         
-    path_model,_,_,_= Generate_path_noLAMBDA_beta(source,model,0.5,workdir,calculation)
+    path_model,_,_= Generate_path(source,model,sigma,workdir,calculation)
     all_file = sorted(os.listdir(path_model))
+
     file_dict = {}
     for pkl in all_file:
         if ".pickle" in pkl:
@@ -320,23 +322,23 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
     if depth is not None:
         d=depth
         
-    path_model,_,_,_= Generate_path_qb(source,model,sigma,workdir,calculation="pval")
+    path_model,_,_= Generate_path(source,model,sigma,workdir,calculation)
     all_file = sorted(os.listdir(path_model))
     file_dict = {}
     for pkl in all_file:
         if (".pickle" in pkl) and ("tpi" not in pkl) and ("giab" not in pkl):
-            if "CEU_enrichedEr" in workdir:
-                pkl=pkl.replace("CEU_enrichedEr_","")
-            else:
-                pkl=pkl.replace("CEU_","")
-            name=pkl.rsplit(".pickle")[0].rsplit("_")
-            print(name)
+            #pkl=pkl.replace("CEU_","")
+            name_parts = pkl.rsplit(".pickle")[0].rsplit("_")
             file_dict[pkl] = {}
-            for each_value in name:
-                file_dict[pkl][each_value.split("-")[0]] = float(each_value.split("-")[1])
-        else:continue
+            for part in name_parts:
+                key_value = part.split("-")
+                if len(key_value) == 2:  # Check if the part contains both key and value
+                    file_dict[pkl][key_value[0]] = float(key_value[1])
+                else:  # Handle parts that do not follow the key-value format
+                    file_dict[pkl][part] = None  # or use a placeholder value
+        else:
+            continue
     file_dict_pd = pd.DataFrame(file_dict).transpose()
-
     file_dict_pd['file'] = file_dict_pd.index
     if Num_para == 3:
         pos_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd[valid_var_np[2]] == valid_full_var_np[2])&(file_dict_pd['t'] == theta_pos)].sort_values(['d','h','g','s'])
@@ -344,54 +346,50 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
     elif Num_para == 2:
         pos_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd['t'] == theta_pos)].sort_values(['d','h','g','s'])
         neg_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd['t'] == theta_neg)].sort_values(['d','h','g','s'])
-    d_group = pos_pd[var_map_np[np.array(var) == None][0]].unique()
+    d_group = neg_pd[var_map_np[np.array(var) == None][0]].unique()
     return d_group,var,var_map_np,fixed_var_np,var_fullname_map_np,variable_var_np,pos_pd,neg_pd
 
-def Generate_path_qb(source,model,sigma,workdir,calculation="pval"):
-    if calculation == "estimate":
-        postfix="esti"
-    else:
-        postfix="p"
-    path_BEASTIE = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/" # semi_empirical/CEU/g-1000
-    if "semi_empirical" in workdir:
-        path_QB = f"{source}/quickBEAST/a8.789625_b8.789625/site_specific/{workdir}/"
-    else:
-        path_QB = f"{source}/quickBEAST/a8.789625_b8.789625/lambda0.04545/{workdir}/"
-    path_NS=f"{source}/binomial/{workdir}/NS_"+postfix+"/" 
-    path_MS=f"{source}/binomial/{workdir}/MS_"+postfix+"/" 
-    return path_BEASTIE, path_QB, path_NS, path_MS
 
 def get_ROC_AUC(path, file_pos, file_neg, calculation,lambdas=None,if_PRR=None,if_prob=None, if_baseline=None,if_AA=None,if_drop=True):
-    # print(path+"/"+file_pos)
-    prob1 = read_data.read_one_pickle(path+"/"+file_pos)
-    prob2 = read_data.read_one_pickle(path+"/"+file_neg)
-
     # baseline estiamtes/prob
     if if_baseline == True and if_AA !=True:
-        if calculation == "max_prob":
+        prob1 = read_data.read_one_pickle(path+"/"+file_pos)
+        prob2 = read_data.read_one_pickle(path+"/"+file_neg)
+        if calculation == "estimate":
+            fpr,tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2, drop_intermediate=if_drop)
+        else:
             fpr,tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=0,drop_intermediate=if_drop)
             precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=0)
-        else:
-            fpr,tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,drop_intermediate=if_drop)
 
     # ADM estimates
     elif if_AA==True and if_baseline!=True:
-        if calculation == "median":
+        prob1 = read_data.read_one_pickle(path+"/"+file_pos)
+        prob2 = read_data.read_one_pickle(path+"/"+file_neg)
+        if calculation == "estimate":
             fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
             precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
         else:
             fpr, tpr, _ = roc_curve([0 for i in range(len(prob1))] + [1 for i in range(len(prob2))], prob1 + prob2,drop_intermediate=if_drop)
-    # model estimates/prob
+
+    # BEASTIE estimates/prob
     elif if_baseline !=True and if_AA != True:
-        prob1=ROC_common.calculate_posterior_value(calculation,prob1,Lambda=lambdas)
-        prob2=ROC_common.calculate_posterior_value(calculation,prob2,Lambda=lambdas)
-        if calculation == "median": #estimates
-            prob1_t = [abs(x - 1) for x in prob1]
-            prob2_t = [abs(x - 1) for x in prob2]
-            fpr, tpr, _ = roc_curve([1 for i in range(len(prob1_t))] + [0 for i in range(len(prob2_t))], prob1_t + prob2_t,drop_intermediate=if_drop)
+        if calculation == "pval":
+            NEG = file_neg.replace('.pickle', '.tsv')
+            POS = file_pos.replace('.pickle', '.tsv')
+            _,_,pos_p_st,neg_p_st,_,_ = quickBeast.get_tsv_p_values(POS,NEG,path)
+            fpr, tpr, precision, recall = quickBeast.get_ROC_tsv(pos_p_st,neg_p_st)
         else:
-            fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
-            precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
+            prob1 = read_data.read_one_pickle(path+"/"+file_pos)
+            prob2 = read_data.read_one_pickle(path+"/"+file_neg)
+            prob1=ROC_common.calculate_posterior_value(calculation,prob1,Lambda=lambdas)
+            prob2=ROC_common.calculate_posterior_value(calculation,prob2,Lambda=lambdas)
+            if calculation == "estimate": #estimates
+                prob1_t = [abs(x - 1) for x in prob1]
+                prob2_t = [abs(x - 1) for x in prob2]
+                fpr, tpr, _ = roc_curve([0 for i in range(len(prob1_t))] + [1 for i in range(len(prob2_t))], prob1_t + prob2_t,drop_intermediate=if_drop)
+            elif calculation == "max_prob": #max prob
+                fpr, tpr, _ = roc_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1,drop_intermediate=if_drop)
+                precision,recall, _ = precision_recall_curve([1 for i in range(len(prob1))] + [0 for i in range(len(prob2))], prob1 + prob2,pos_label=1)
 
     if if_PRR is not True:
         return(fpr, tpr, round(auc(fpr,tpr),3))
@@ -412,9 +410,9 @@ def Generate_path_GIAB(source,model,sigma,workdir):
     path_MS=f"{source}/binomial/simulation/{workdir}/MS_p/" 
     return path_model,path_GIAB,path_NS,path_MS
 
-def Generate_path(source,model,sigma,workdir,calculation="max prob"):
+def Generate_path(source,model,sigma,workdir,calculation="estimate"):
     path_model = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/"
-    if calculation == "max prob":
+    if calculation == "pval":
         postfix="p"
     else:
         postfix="esti"
@@ -576,7 +574,7 @@ def Plot_ROC_fix3_noLambda_semi(source,model1,model2,workdir,calculation,Num_col
         current_group_pos_list = pos_pd[pos_pd[var_map_np[np.array(var) == None][0]] == each].index
         current_group_neg_list = neg_pd[neg_pd[var_map_np[np.array(var) == None][0]] == each].index
         print(current_group_neg_list)
-        sys.exit()
+
         xlabels = "Fixed parameters "
         for idx in range(len(current_group_pos_list)):
             reduced_file_pos = current_group_pos_list[idx].rsplit("_",1)[0]+".pickle"

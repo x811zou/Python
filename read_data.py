@@ -252,6 +252,12 @@ def read_one_pickle(filename):
     with open(filename, "rb") as file:
         return pickle.load(file)
 
+def get_NS_p_values(ns_POS, ns_NEG, ns_path):
+    # read data
+    ns_pos_p = read_one_pickle(ns_path+"/"+ns_POS)
+    ns_neg_p = read_one_pickle(ns_path+"/"+ns_NEG)
+    return ns_pos_p,ns_neg_p
+
 def updateGeneToSampleDict(a, b):
   for k, v in b.items():
     if k in a:

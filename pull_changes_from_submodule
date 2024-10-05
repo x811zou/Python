@@ -1,7 +1,7 @@
 cd Ipy_notebook/Python
 git commit -am "Made changes in submodule"
 git push
-cd /home/scarlett/github/Python  # Replace with the actual path to your "Python" repository
+cd /path/to/Python  # Replace with the actual path to your "Python" repository
 
 git submodule update --remote
 git commit -am "Updated submodule reference to latest commit"

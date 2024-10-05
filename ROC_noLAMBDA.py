@@ -320,13 +320,15 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
     if depth is not None:
         d=depth
         
-    path_model,_,_,_= Generate_path_noLAMBDA_beta(source,model,sigma,workdir,calculation)
+    path_model,_,_,_= Generate_path_qb(source,model,sigma,workdir,calculation="pval")
     all_file = sorted(os.listdir(path_model))
     file_dict = {}
     for pkl in all_file:
         if (".pickle" in pkl) and ("tpi" not in pkl) and ("giab" not in pkl):
-            print(pkl)
-            pkl=pkl.replace("CEU_","")
+            if "CEU_enrichedEr" in workdir:
+                pkl=pkl.replace("CEU_enrichedEr_","")
+            else:
+                pkl=pkl.replace("CEU_","")
             name=pkl.rsplit(".pickle")[0].rsplit("_")
             print(name)
             file_dict[pkl] = {}
@@ -334,7 +336,7 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
                 file_dict[pkl][each_value.split("-")[0]] = float(each_value.split("-")[1])
         else:continue
     file_dict_pd = pd.DataFrame(file_dict).transpose()
-    print(file_dict_pd)
+
     file_dict_pd['file'] = file_dict_pd.index
     if Num_para == 3:
         pos_pd = file_dict_pd[(file_dict_pd[valid_var_np[0]] == valid_full_var_np[0])&(file_dict_pd[valid_var_np[1]] == valid_full_var_np[1])&(file_dict_pd[valid_var_np[2]] == valid_full_var_np[2])&(file_dict_pd['t'] == theta_pos)].sort_values(['d','h','g','s'])
@@ -345,6 +347,19 @@ def Prepare_data_fix_semi(gene, hets, depth, sigma,source,model,workdir,calculat
     d_group = pos_pd[var_map_np[np.array(var) == None][0]].unique()
     return d_group,var,var_map_np,fixed_var_np,var_fullname_map_np,variable_var_np,pos_pd,neg_pd
 
+def Generate_path_qb(source,model,sigma,workdir,calculation="pval"):
+    if calculation == "estimate":
+        postfix="esti"
+    else:
+        postfix="p"
+    path_BEASTIE = f"{source}/{model}/sigma{sigma}/{workdir}/output_pkl/" # semi_empirical/CEU/g-1000
+    if "semi_empirical" in workdir:
+        path_QB = f"{source}/quickBEAST/a8.789625_b8.789625/site_specific/{workdir}/"
+    else:
+        path_QB = f"{source}/quickBEAST/a8.789625_b8.789625/lambda0.04545/{workdir}/"
+    path_NS=f"{source}/binomial/{workdir}/NS_"+postfix+"/" 
+    path_MS=f"{source}/binomial/{workdir}/MS_"+postfix+"/" 
+    return path_BEASTIE, path_QB, path_NS, path_MS
 
 def get_ROC_AUC(path, file_pos, file_neg, calculation,lambdas=None,if_PRR=None,if_prob=None, if_baseline=None,if_AA=None,if_drop=True):
     # print(path+"/"+file_pos)

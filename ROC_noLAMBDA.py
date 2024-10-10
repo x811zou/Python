@@ -16,9 +16,9 @@ import sys
 import matplotlib.pyplot as plt
 from sklearn import metrics,preprocessing
 from sklearn.metrics import roc_curve, auc,precision_recall_curve
-from . import ROC_common
-from . import read_data
-from . import quickBeast
+import ROC_common
+import read_data
+import quickBeast
 
 def ROC_comparison_fix3_beta(source,model,workdir,calculation,theta_pos=None,theta_neg=None,gene=None,hets=None,depth=None,sigma=None,title=None,Num_para=3,Num_col=None):
     # judge whether  2 of the 4 are None, and 2 of the 4 are not None

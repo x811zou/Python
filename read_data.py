@@ -7,7 +7,7 @@ import time
 import multiprocessing
 import numpy as np
 import pickle
-from . import calculateCDF
+import calculateCDF
 
 def get_directories(path):
     subdirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]

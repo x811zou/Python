@@ -5,13 +5,13 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.stats import norm
-from .read_data import read_one_pickle
+from read_data import read_one_pickle
 from sklearn.metrics import roc_curve, auc,precision_recall_curve
 import matplotlib.pyplot as plt
 import math
-from .read_data import read_one_pickle, get_NS_p_values
-from .ROC_common import Make_judgement, calculate_posterior_value
-from .ROC_noLAMBDA import get_ROC_AUC, Prepare_data_fix
+from read_data import read_one_pickle, get_NS_p_values
+from ROC_common import Make_judgement, calculate_posterior_value
+from ROC_noLAMBDA import get_ROC_AUC, Prepare_data_fix
 import sys
 sys.path.append('/home/scarlett/github/BEASTIE')
 # from BEASTIE import predict_lambda_GAM
